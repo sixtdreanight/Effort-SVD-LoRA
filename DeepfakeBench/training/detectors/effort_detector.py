@@ -145,30 +145,52 @@ class EffortDetector(nn.Module):
         self.prob, self.label = [], []
         self.correct, self.total = 0, 0
 
+#    def build_backbone(self, config):
+#        # ⚠⚠⚠ Download CLIP model using the below link
+#        # https://drive.google.com/drive/folders/1fm3Jd8lFMiSP1qgdmsxfqlJZGpr_bXsx?usp=drive_link
+#        
+#        # mean: [0.48145466, 0.4578275, 0.40821073]
+#        # std: [0.26862954, 0.26130258, 0.27577711]
+#        
+#        # ViT-L/14 224*224
+#        # clip_model = CLIPModel.from_pretrained("../models--openai--clip-vit-large-patch14")  # the path of this folder in your disk (download from the above link)
+#        clip_model = CLIPModel.from_pretrained("/home/user1/effort/Effort-AIGI-Detection/Effort-AIGI-Detection/DeepfakeBench/training/models--openai--clip-vit-large-patch14/")  # the path of this folder in your disk (download from the above link)
+#
+#        # clip_model = CLIPModel.from_pretrained("/home/user1/effort/Effort-AIGI-Detection/Effort-AIGI-Detection/DeepfakeBench/training/models--openai--clip-vit-large-patch14/")  # the path of this folder in your disk (download from the above link)
+#
+#        # Apply SVD to self_attn layers only
+#        # ViT-L/14 224*224: 1024-1
+#        clip_model.vision_model = apply_svd_main_and_lora(clip_model.vision_model, svd_r=1024 - 1, lora_rank=4, lora_alpha=16, lora_dropout=0.1)
+#
+#        #for name, param in clip_model.vision_model.named_parameters():
+#        #    print('{}: {}'.format(name, param.requires_grad))
+#        #num_param = sum(p.numel() for p in clip_model.vision_model.parameters() if p.requires_grad)
+#        #num_total_param = sum(p.numel() for p in clip_model.vision_model.parameters())
+#        #print('Number of total parameters: {}, tunable parameters: {}'.format(num_total_param, num_param))
+#
+#        return clip_model.vision_model
     def build_backbone(self, config):
-        # ⚠⚠⚠ Download CLIP model using the below link
-        # https://drive.google.com/drive/folders/1fm3Jd8lFMiSP1qgdmsxfqlJZGpr_bXsx?usp=drive_link
-        
-        # mean: [0.48145466, 0.4578275, 0.40821073]
-        # std: [0.26862954, 0.26130258, 0.27577711]
-        
-        # ViT-L/14 224*224
-        # clip_model = CLIPModel.from_pretrained("../models--openai--clip-vit-large-patch14")  # the path of this folder in your disk (download from the above link)
-        clip_model = CLIPModel.from_pretrained("/home/user1/effort/Effort-AIGI-Detection/Effort-AIGI-Detection/DeepfakeBench/training/models--openai--clip-vit-large-patch14/")  # the path of this folder in your disk (download from the above link)
+        clip_model = CLIPModel.from_pretrained(
+        config['clip_path']
+        )
 
-        # clip_model = CLIPModel.from_pretrained("/home/user1/effort/Effort-AIGI-Detection/Effort-AIGI-Detection/DeepfakeBench/training/models--openai--clip-vit-large-patch14/")  # the path of this folder in your disk (download from the above link)
+        lora_cfg = config.get("lora", {})
 
-        # Apply SVD to self_attn layers only
-        # ViT-L/14 224*224: 1024-1
-        clip_model.vision_model = apply_svd_main_and_lora(clip_model.vision_model, svd_r=1024 - 1, lora_rank=4, lora_alpha=16, lora_dropout=0.1)
+        if lora_cfg.get("enable", False):
+            vision_model, replaced_count = apply_svd_main_and_lora(
+                clip_model.vision_model,
+                svd_r=lora_cfg.get("svd_r", 1023),
+                lora_rank=lora_cfg.get("rank", 4),
+                lora_alpha=lora_cfg.get("alpha", lora_cfg.get("rank", 4)),
+                lora_dropout=lora_cfg.get("dropout", 0.1),
+            )
+            logger.info(f"LoRA enabled | replaced layers: {replaced_count}")
+        else:
+            vision_model = clip_model.vision_model
+            replaced_count = 0
 
-        #for name, param in clip_model.vision_model.named_parameters():
-        #    print('{}: {}'.format(name, param.requires_grad))
-        #num_param = sum(p.numel() for p in clip_model.vision_model.parameters() if p.requires_grad)
-        #num_total_param = sum(p.numel() for p in clip_model.vision_model.parameters())
-        #print('Number of total parameters: {}, tunable parameters: {}'.format(num_total_param, num_param))
+        return vision_model, replaced_count
 
-        return clip_model.vision_model
 
     def features(self, data_dict: dict) -> torch.tensor:
         feat = self.backbone(data_dict['image'])['pooler_output']
