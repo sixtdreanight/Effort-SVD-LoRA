@@ -61,7 +61,7 @@ class LoRALinear(nn.Module):
 
 # ---------------- Apply SVD + LoRA ----------------
 def apply_svd_main_and_lora(
-    model, svd_r=1023, lora_rank=4, lora_alpha=16, lora_dropout=0.1
+    model, svd_r=1023, lora_rank=4, lora_alpha=12, lora_dropout=0.1
 ):
     target = ["q_proj", "k_proj", "v_proj", "out_proj", "fc1", "fc2"]
     replaced = 0
